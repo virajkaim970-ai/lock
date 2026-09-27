@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lock until June 2028</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    background: #0b0c10;
+    color: #e8eaf0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .box {
+    width: 100%;
+    max-width: 700px;
+    background: #14161d;
+    border: 1px solid #262a36;
+    border-radius: 16px;
+    padding: 28px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 220px;
+    background: #0b0c10;
+    border: 1px solid #262a36;
+    border-radius: 10px;
+    padding: 14px;
+    color: #e8eaf0;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 15px;
+    line-height: 1.6;
+    resize: vertical;
+    outline: none;
+  }
+  textarea:focus { border-color: #5b7cfa; }
+  button {
+    margin-top: 16px;
+    width: 100%;
+    padding: 14px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    background: #5b7cfa;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  button:disabled { opacity: .35; cursor: not-allowed; }
+  button:hover:not(:disabled) { background: #6d8bff; }
+  .msg { text-align: center; padding: 40px 0; font-size: 18px; color: #9aa3b8; }
+  .msg strong { color: #e8eaf0; }
+  pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: #0b0c10;
+    border: 1px solid #262a36;
+    border-radius: 10px;
+    padding: 14px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+  .view { display: none; }
+  .view.active { display: block; }
+</style>
+</head>
+<body>
+
+<div class="box">
+
+  <!-- INPUT -->
+  <div class="view" id="v-input">
+    <textarea id="input" placeholder="Paste something here…" spellcheck="false"></textarea>
+    <button id="start" disabled>Start</button>
+  </div>
+
+  <!-- LOCKED -->
+  <div class="view" id="v-locked">
+    <div class="msg">
+      🔒 Locked<br>
+      <strong id="until"></strong>
+    </div>
+  </div>
+
+  <!-- UNLOCKED -->
+  <div class="view" id="v-open">
+    <pre id="out"></pre>
+    <button id="again">Start a new lock</button>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  const UNLOCK = new Date('2028-06-01T00:00:00').getTime(); // June 1, 2028
+  const KEY = 'lock2028';
+
+  const $ = id => document.getElementById(id);
+  const input = $('input'), startBtn = $('start'), out = $('out');
+
+  /* ---------- encode / decode ---------- */
+  function enc(s) {
+    const b = new TextEncoder().encode(s);
+    let bin = '';
+    for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]);
+    return btoa(bin);
+  }
+  function dec(s) {
+    const bin = atob(s);
+    const b = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(b);
+  }
+
+  /* ---------- views ---------- */
+  function show(v) {
+    ['v-input', 'v-locked', 'v-open'].forEach(id => {
+      $(id).classList.toggle('active', id === v);
+    });
+  }
+
+  /* ---------- start ---------- */
+  input.addEventListener('input', () => {
+    startBtn.disabled = input.value.trim() === '';
+  });
+
+  startBtn.addEventListener('click', () => {
+    if (!input.value.trim()) return;
+    if (!confirm('Lock this until June 1, 2028? You cannot change it until then.')) return;
+
+    localStorage.setItem(KEY, enc(input.value));
+    input.value = '';
+    startBtn.disabled = true;
+    render();
+  });
+
+  /* ---------- new lock after unlock ---------- */
+  $('again').addEventListener('click', () => {
+    localStorage.removeItem(KEY);
+    show('v-input');
+  });
+
+  /* ---------- render ---------- */
+  let timer = null;
+
+  function render() {
+    if (timer) { clearInterval(timer); timer = null; }
+
+    const saved = localStorage.getItem(KEY);
+
+    // nothing saved → show input
+    if (!saved) {
+      show('v-input');
+      return;
+    }
+
+    // still locked → show lock message, check every second
+    if (Date.now() < UNLOCK) {
+      $('until').textContent = new Date(UNLOCK).toLocaleDateString(undefined, {
+        year: 'numeric', month: 'long', day: 'numeric'
+      });
+      show('v-locked');
+      timer = setInterval(render, 1000);
+      return;
+    }
+
+    // time is up → show the text
+    try {
+      out.textContent = dec(saved);
+    } catch (e) {
+      out.textContent = '[could not read the saved text]';
+    }
+    show('v-open');
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
